@@ -40,7 +40,7 @@ that incorrectly reports errors when using RSAES-OAEP.
 
   The demo consists of two programs: a client and a server. (And an
   OAEP implementation that is included for the sake of simplifying the
-  demo.)
+  demo implementation.)
 
 ** HTTP Server
 
