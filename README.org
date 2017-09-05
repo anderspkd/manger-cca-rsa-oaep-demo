@@ -1,0 +1,79 @@
+#+TITLE: Demonstration of Manger's oracle against RSAES-OAEP
+
+A small program that demonstrates Manger's oracle against a server
+that incorrectly reports errors when using RSAES-OAEP.
+
+* How it works
+
+  A bit of notation
+  - ~OAEP_ENCODE(m)~ Performs an OAEP encoding of m
+  - ~bytes2int(m)~ Transforms message m into an integer (big-endian)
+  - ~numbytes(n)~ Returns the byte length of integer n
+
+
+  recall that RSAES-OAEP works as follows:
+
+  : m' = OAEP_ENCODE(m)
+  : m' = 0x00 || m'
+  : m' = bytes2int(m')
+  : c = (m')^e mod n
+
+  where the publickey is (n, e). Let
+
+  : k = numbytes(n)
+  : B = 2^(8(k - 1))
+
+  In a nutshell, Manger's attack works if we can distinguish between
+  the two cases
+  1. ~(c^d mod n) >= B~
+  2. ~(c^d mod n) < B~
+  Note that the first corresponds to the case where m' is not ~0x00~
+  above.
+
+  If this fact can be observered, we have an oracle that essentially
+  allows us to do a search for m' and thus learn the original m (since
+  OAEP decoding is deterministic).
+
+  See Manger's paper for details
+
+* Demo
+
+  The demo consists of two programs: a client and a server. (And an
+  OAEP implementation that is included for the sake of simplifying the
+  demo.)
+
+** HTTP Server
+
+   The server, when started, creates a flag of the form
+   : flag = flag{32 random bytes}
+   an RSA keypair (pk, sk), and sets
+   : c = Enc(sk, flag)
+   where ~Enc~ performs an RSAES-OAEP encryption.
+
+   The server exposes a couple of HTTP endpoints
+
+   | name            | function                                                                                                    |
+   |-----------------+-------------------------------------------------------------------------------------------------------------|
+   | /encrypted_flag | returns c                                                                                                   |
+   | /publickey      | returns pk                                                                                                  |
+   | /decrypt?hex(c) | performs an RSAES-OAEP decryption on c and returns "OK" if everything went well, otherwise returns an error |
+   | /test_flag?f    | asks the server to compare f to flag                                                                        |
+
+   Clearly, ~decrypt~ exposes an oracle we can use :-)
+
+** Client
+
+   The client implements Manger's decryption oracle and interacts with
+   the server in the following way:
+   1. Aquire server's publickey
+   2. Aquire encrypted flag
+   3. Run decryption oracle in order to get m'
+   4. Perform the OAEP decoding process to recover original m (i.e., the flag)
+   5. Test the flag against the server's stored flag (query ~test_flag~)
+
+* References
+
+  - Manger, James. "A chosen ciphertext attack on RSA optimal
+    asymmetric encryption padding (OAEP) as standardized in PKCS# 1
+    v2. 0." Advances in Cryptology—CRYPTO 2001. Springer
+    Berlin/Heidelberg, 2001.
